@@ -5,6 +5,41 @@
 - Docker & Docker Compose
 - (Optional) Python 3.11+ if running outside Docker
 
+## Running Outside Docker (local Python)
+
+Each service is a standalone app whose package root is its own directory, so run
+it **from that directory** — this is what makes `import app` resolve:
+
+```bash
+# one venv with both services' dependencies is fine
+python -m venv .venv && . .venv/bin/activate
+.venv/bin/pip install -r merchant/requirements.txt -r mock_ppg/requirements.txt
+
+# terminal 1
+cd merchant && DATABASE_URL=sqlite+aiosqlite:///./merchant.db \
+  ../.venv/bin/uvicorn app.main:app --reload --port 8000
+
+# terminal 2
+cd mock_ppg && ../.venv/bin/uvicorn app.main:app --reload --port 8001
+```
+
+### IDE setup (PyCharm / IntelliJ)
+
+Two settings are required, because `merchant/app` and `mock_ppg/app` are both
+imported as the top-level package `app`:
+
+1. **Interpreter** must have the dependencies installed:
+   *Settings → Project → Python Interpreter*. If imports such as `fastapi` or
+   `httpx` show as unresolved, the interpreter is a stale venv — install the two
+   `requirements.txt` files into it.
+2. **Source roots**: right-click `merchant` and `mock_ppg` →
+   *Mark Directory as → Sources Root*. Without this, `from app.config import
+   settings` cannot resolve, because the repository root is the content root and
+   neither service directory is a Python package.
+
+Alternatively, add the service directory to `PYTHONPATH`
+(`PYTHONPATH=mock_ppg`).
+
 ## Quick Start (Mock mode)
 
 ```bash
@@ -85,6 +120,15 @@ uvicorn app.main:app --port 8000 --reload
 docker compose logs -f merchant
 docker compose logs -f mock-ppg
 
-# Reset SQLite
+# Reset SQLite (local runs)
 rm merchant/merchant.db
+rm mock_ppg/mock_ppg.db
+
+# Reset SQLite (Docker: drops both volumes)
+docker compose down -v
+docker compose up --build
 ```
+
+The mock's table is created on startup by `init_db()` and is never dropped
+automatically, so a restart keeps the demo's purchases. Delete the file (or the
+volume) to start clean.

@@ -1,8 +1,9 @@
 """FastAPI entrypoint for the mock PPG service.
 
-Skeleton only: the app boots and exposes `/health`. Token, purchase and
-switching behavior is implemented in the next phase (TODOs in
-`app/api/router.py`, `app/services/` and `app/repositories/`).
+The app boots, exposes `/health` and owns a SQLite file. Purchase state lives
+in that database (ADR-008) rather than in process memory, so a `docker compose
+restart` no longer wipes the demo's purchases. Endpoint behavior is still
+staged (TODOs in `app/api/router.py` and `app/services/`).
 """
 
 import logging
@@ -14,22 +15,18 @@ from fastapi.responses import JSONResponse
 
 from app.api.router import paying_router, router as v3_router
 from app.config import settings
-from app.repositories.purchase_store import PurchaseStore
-from app.services.purchase_service import MockPurchaseService
+from app.db import close_db, init_db
 
 logger = logging.getLogger(__name__)
-
-store = PurchaseStore()
-# TODO: build the service in the lifespan once the store is ready.
-service = MockPurchaseService(store)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Manage startup/shutdown logging.
+    """Create the schema on startup and release the DB on shutdown.
 
-    TODO: reset the in-memory store on startup so every demo session starts
-    from a clean state.
+    `init_db` is additive, so an existing `mock_ppg.db` is reused as-is. Use
+    `docker compose down -v` (or delete the file) to start a demo from a clean
+    slate.
 
     Args:
         app: The FastAPI application instance.
@@ -38,11 +35,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         None: Control is handed back to the server while the app runs.
     """
     logging.basicConfig(level=settings.log_level.upper())
-    logger.info("Starting %s (mock PPG, in-memory state)", settings.app_name)
+    await init_db()
+    logger.info("Started %s (SQLite at %s)", settings.app_name, settings.database_url)
     try:
         yield
     finally:
-        store.clear()
+        await close_db()
         logger.info("Mock PPG stopped")
 
 

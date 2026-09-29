@@ -20,7 +20,9 @@ from app.api.schemas import (
 )
 from app.config import settings
 
-# TODO: import the shared `MockPurchaseService` instance from `app.main`.
+# TODO: import `MockPurchaseService` via `Depends(get_purchase_service)`
+#       (app/dependencies.py) -- there is no shared service instance anymore,
+#       because each request gets its own repository and session.
 # TODO: extract the `Authorization: Bearer ...` check into a small dependency
 #       and return the real PPG error envelope on failure.
 

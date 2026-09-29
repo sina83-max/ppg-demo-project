@@ -117,9 +117,12 @@ ppg-demo/
 │   ├── app/
 │   │   ├── main.py
 │   │   ├── config.py
+│   │   ├── db.py
+│   │   ├── dependencies.py
 │   │   ├── api/
 │   │   ├── services/
-│   │   ├── repositories/          # in-memory is acceptable
+│   │   ├── repositories/          # SQLAlchemy over SQLite (ADR-008)
+│   │   ├── models/
 │   │   └── ...
 │   ├── requirements.txt
 │   └── Dockerfile
@@ -190,7 +193,8 @@ The mock must be behaviorally accurate enough for a realistic demo:
 - Verify only succeeds when state is `READY_TO_VERIFY`
 - Reverse changes state to `REVERSED`
 - Support returning `UNKNOWN` occasionally (for demo of retry logic)
-- Keep state in memory (dict or simple list) – no real DB needed
+- Persist purchases in its own SQLite file (ADR-008), so duplicate
+  `clientReferenceNumber` is rejected and `GET /v3/purchases` can page with SQL
 
 ---
 

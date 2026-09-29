@@ -14,7 +14,8 @@ from typing import Any, Optional
 import httpx
 
 from app.config import settings
-from app.repositories.purchase_store import PurchaseStore
+from app.models.purchase import Purchase
+from app.repositories.purchase_repository import PurchaseRepository
 
 logger = logging.getLogger(__name__)
 
@@ -22,13 +23,34 @@ logger = logging.getLogger(__name__)
 class MockPurchaseService:
     """Simulates the PPG purchase state machine and callbacks."""
 
-    def __init__(self, store: PurchaseStore) -> None:
-        """Store the in-memory purchase store.
+    def __init__(self, repository: PurchaseRepository) -> None:
+        """Store the repository used for all persistence.
+
+        The service never sees a session; it only asks the repository. It does
+        not own a repository either -- FastAPI builds one per request
+        (app/dependencies.py), because the session underneath cannot be shared.
 
         Args:
-            store: In-memory purchase storage.
+            repository: SQL data access for the mock's `purchases` table.
         """
-        self._store = store
+        self._repository = repository
+
+    @staticmethod
+    def to_wire(purchase: Purchase) -> dict[str, Any]:
+        """Map an ORM row onto the camelCase PPG wire format.
+
+        TODO: implement the snake_case -> camelCase mapping required by
+        docs/api-contracts.md (purchase_id -> purchaseId,
+        client_reference_number -> clientReferenceNumber, ...). Keeping the
+        mapping in one place is what lets the columns stay snake_case.
+
+        Args:
+            purchase: The persisted row.
+
+        Returns:
+            dict[str, Any]: PPG-shaped payload.
+        """
+        raise NotImplementedError
 
     # --- Purchases -----------------------------------------------------
 
@@ -122,7 +144,7 @@ class MockPurchaseService:
         Returns:
             dict[str, Any]: Paginated purchases payload.
         """
-        # TODO: implement via `PurchaseStore.filter`.
+        # TODO: implement via `PurchaseRepository.filter` + `to_wire`.
         raise NotImplementedError
 
     # --- Callbacks -----------------------------------------------------

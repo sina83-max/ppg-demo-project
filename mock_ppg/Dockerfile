@@ -11,6 +11,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
 
+# SQLite file lives here; mounted as a volume in docker-compose.yml
+RUN mkdir -p /data
+ENV DATABASE_URL=sqlite+aiosqlite:////data/mock_ppg.db
+
 EXPOSE 8001
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]

@@ -7,9 +7,22 @@ services:
     environment:
       LOG_LEVEL: ${MOCK_LOG_LEVEL:-INFO}
       UNKNOWN_ANSWER_RATE: ${MOCK_UNKNOWN_ANSWER_RATE:-0.0}
+      # --- Database (inside the container, persisted via the volume below)
+      DATABASE_URL: sqlite+aiosqlite:////data/mock_ppg.db
+      # --- URLs
+      # Browser-facing base; used to build pspSwitchingUrl.
+      PUBLIC_BASE_URL: ${MOCK_PUBLIC_BASE_URL:-http://localhost:8001}
+      # The merchant builds callbackUrl from MERCHANT_CALLBACK_BASE
+      # (http://localhost:8000), which is correct for a browser and for real
+      # Jibit PPG but unreachable from inside this container. The mock rewrites
+      # the host to the compose service name when posting the callback.
+      # Leave empty to disable the rewrite.
+      CALLBACK_BASE_URL_OVERRIDE: ${MOCK_CALLBACK_BASE_URL_OVERRIDE:-http://merchant:8000}
     ports:
       # Host:container mapping – host port is configurable via .env
       - "${MOCK_PPG_PORT:-8001}:8001"
+    volumes:
+      - ./mock_ppg/data:/data
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health')"]
       interval: 10s
@@ -32,11 +45,9 @@ services:
       PPG_SECRET_KEY: ${PPG_SECRET_KEY:-mock-secret}
       # --- Merchant
       # Browser-facing base (used for links shown in the dashboard).
+      # The mock PPG rewrites the host to http://merchant:8000 before posting
+      # the callback; the real gateway receives this URL unchanged.
       MERCHANT_CALLBACK_BASE: ${MERCHANT_CALLBACK_BASE:-http://localhost:8000}
-      # Container-network base. The mock posts the callback from inside its own
-      # container, where "localhost" is itself, so the callback URL must be the
-      # compose service name. Only relevant for the local mock.
-      MERCHANT_CALLBACK_BASE_INTERNAL: ${MERCHANT_CALLBACK_BASE_INTERNAL:-http://merchant:8000}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # --- Database (inside the container, persisted via the volume below)
       DATABASE_URL: sqlite+aiosqlite:////data/merchant.db

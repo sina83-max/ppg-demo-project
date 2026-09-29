@@ -30,7 +30,7 @@
 
 ## ADR-005: In-memory Store for Mock PPG
 
-**Status**: Accepted  
+**Status**: Superseded by ADR-008  
 **Context**: Mock only needs to live for the duration of a demo session.  
 **Decision**: Simple Python dict / list. No database.  
 **Consequences**: Fast to implement, state is lost on restart (acceptable).
@@ -48,3 +48,21 @@
 **Context**: This is a technical demonstration, not a production multi-user system.  
 **Decision**: Open dashboard.  
 **Consequences**: Simpler code. Clearly documented as out of scope for production.
+
+## ADR-008: SQLite for Mock PPG
+
+**Status**: Accepted  
+**Context**: ADR-005 chose a dict for the mock to avoid a database. It cost more
+than it saved: the mock could not reject a duplicate `clientReferenceNumber` (no
+UNIQUE constraint) and could not page `GET /v3/purchases` (no `ORDER BY`/`LIMIT`),
+so the merchant's inquiry and pagination paths could not be demonstrated
+end-to-end. Separately, losing all state on `docker compose restart` is a poor
+demo experience – restarting to clear a bug also wipes the history on screen.  
+**Decision**: The mock owns a separate SQLite file via aiosqlite + SQLAlchemy 2.0
+(same stack as ADR-003), and gains `app/db.py`, `app/models/` and an async
+`PurchaseRepository`. The service layer keeps receiving plain values, so the swap
+is invisible above the repository.  
+**Consequences**: The mock now mirrors the real gateway's uniqueness and paging
+behavior, and survives restarts. Cost: one more dependency set and a `purchaseId`
+generator that must avoid collisions. Resetting a demo is now an explicit step
+(`rm mock_ppg/mock_ppg.db` or `docker compose down -v`) instead of a restart.
