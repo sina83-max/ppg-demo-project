@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 from app.api.router import paying_router, router as v3_router
 from app.config import settings
 from app.db import close_db, init_db
+from app.errors import install_ppg_error_handlers
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,8 @@ app = FastAPI(
     debug=settings.debug,
     lifespan=lifespan,
 )
+
+install_ppg_error_handlers(app)
 
 app.include_router(v3_router)
 app.include_router(paying_router)

@@ -10,6 +10,7 @@ A repository instance is bound to one request's session and must not be shared.
 from typing import Any, Optional
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.purchase import Purchase, utcnow
@@ -54,7 +55,13 @@ class PurchaseRepository:
         """
         purchase = Purchase(**values)
         self._session.add(purchase)
-        await self._session.commit()
+        try:
+            await self._session.commit()
+        except IntegrityError:
+            # The session is unusable after a failed commit; reset it so the
+            # service can still read from it and report the conflict.
+            await self._session.rollback()
+            raise
         await self._session.refresh(purchase)
         return purchase
 

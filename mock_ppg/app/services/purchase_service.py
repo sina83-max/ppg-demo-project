@@ -9,15 +9,35 @@ Rules come from docs/AGENTS.md section 8:
 """
 
 import logging
+from datetime import datetime
 from typing import Any, Optional
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
+from sqlalchemy.exc import IntegrityError
 
 from app.config import settings
-from app.models.purchase import Purchase
+from app.errors import ppg_error
+from app.models.purchase import Purchase, PurchaseState
 from app.repositories.purchase_repository import PurchaseRepository
 
 logger = logging.getLogger(__name__)
+
+
+def _iso(moment: datetime) -> str:
+    """Render a naive-UTC timestamp as ISO-8601 with an explicit `Z`.
+
+    Columns hold naive UTC because SQLite drops tzinfo
+    (see `app/models/purchase.py`); the trailing `Z` restores the offset the
+    real gateway would send.
+
+    Args:
+        moment: Naive UTC timestamp from the database.
+
+    Returns:
+        str: ISO-8601 timestamp.
+    """
+    return moment.isoformat() + "Z"
 
 
 class MockPurchaseService:
@@ -50,7 +70,67 @@ class MockPurchaseService:
         Returns:
             dict[str, Any]: PPG-shaped payload.
         """
-        raise NotImplementedError
+        return {
+            "purchaseId": purchase.purchase_id,
+            "clientReferenceNumber": purchase.client_reference_number,
+            "amount": purchase.amount,
+            "wage": purchase.wage,
+            "currency": purchase.currency,
+            "state": purchase.state,
+            "callbackUrl": purchase.callback_url,
+            "description": purchase.description,
+            "userIdentifier": purchase.user_identifier,
+            "createdAt": _iso(purchase.created_at),
+            "updatedAt": _iso(purchase.updated_at),
+        }
+
+    @staticmethod
+    def resolve_callback_url(callback_url: str) -> str:
+        """Rewrite the callback host when running under Docker.
+
+        The merchant builds `callbackUrl` from its browser-facing base
+        (`http://localhost:8000`). That is correct for a browser and for the
+        real Jibit PPG, but unreachable from inside this container, where
+        "localhost" is the mock itself. Swapping in
+        `settings.callback_base_url_override` fixes the mock without the
+        merchant needing to know which gateway it is talking to, which is what
+        keeps the environment switch to three variables
+        (docs/AGENTS.md section 11).
+
+        Args:
+            callback_url: The URL the merchant sent.
+
+        Returns:
+            str: The URL the mock will actually POST to.
+        """
+        override = settings.callback_base_url_override.rstrip("/")
+        if not override:
+            return callback_url
+        original = urlsplit(callback_url)
+        return urlunsplit(
+            (
+                original.scheme,
+                urlsplit(override).netloc,
+                original.path,
+                original.query,
+                original.fragment,
+            )
+        )
+
+    @staticmethod
+    def build_switching_url(purchase_id: int) -> str:
+        """Return the URL the browser is redirected to (the fake PSP page).
+
+        Args:
+            purchase_id: The id we just assigned.
+
+        Returns:
+            str: Absolute switching URL, based on the browser-facing base.
+        """
+        return (
+            f"{settings.public_base_url.rstrip('/')}"
+            f"/purchases/{purchase_id}/payments"
+        )
 
     # --- Purchases -----------------------------------------------------
 
@@ -67,8 +147,35 @@ class MockPurchaseService:
         Returns:
             dict[str, Any]: `PurchaseCreationResult`.
         """
-        # TODO: implement.
-        raise NotImplementedError
+        purchase_id = await self._repository.next_purchase_id()
+        try:
+            purchase = await self._repository.create(
+                {
+                    "purchase_id": purchase_id,
+                    "client_reference_number": payload["clientReferenceNumber"],
+                    "amount": payload["amount"],
+                    "wage": payload.get("wage") or 0,
+                    "currency": payload.get("currency") or "IRR",
+                    "state": PurchaseState.IN_PROGRESS,
+                    "callback_url": self.resolve_callback_url(payload["callbackUrl"]),
+                    "description": payload.get("description"),
+                    "user_identifier": payload.get("userIdentifier"),
+                }
+            )
+        except IntegrityError:
+            raise ppg_error(
+                "purchase.duplicate_client_reference",
+                f"clientReferenceNumber '{payload['clientReferenceNumber']}' "
+                "has already been used.",
+                status_code=409,
+            ) from None
+
+        return {
+            "purchaseId": purchase.purchase_id,
+            "pspSwitchingUrl": self.build_switching_url(purchase.purchase_id),
+            "clientReferenceNumber": purchase.client_reference_number,
+            "state": purchase.state,
+        }
 
     async def handle_switching(self, purchase_id: int, outcome: str = "SUCCESSFUL") -> dict[str, Any]:
         """Simulate the user completing payment on the PSP page.

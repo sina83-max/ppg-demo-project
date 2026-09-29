@@ -10,21 +10,23 @@ Endpoints (all under `/v3`):
 
 from typing import Any
 
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Depends, Query
 
 from app.api.schemas import (
     CreatePurchaseRequest,
+    PurchaseCreationResult,
     ReverseRequest,
     TokenRefreshRequest,
     TokenRequest,
+    TokenResponse,
 )
-from app.config import settings
-
-# TODO: import `MockPurchaseService` via `Depends(get_purchase_service)`
-#       (app/dependencies.py) -- there is no shared service instance anymore,
-#       because each request gets its own repository and session.
-# TODO: extract the `Authorization: Bearer ...` check into a small dependency
-#       and return the real PPG error envelope on failure.
+from app.dependencies import (
+    get_purchase_service,
+    get_token_service,
+    require_access_token,
+)
+from app.services.purchase_service import MockPurchaseService
+from app.services.token_service import TokenService
 
 router = APIRouter(prefix="/v3")
 
@@ -32,71 +34,81 @@ router = APIRouter(prefix="/v3")
 # --- Token -----------------------------------------------------------------
 
 
-@router.post("/tokens")
-async def generate_token(payload: TokenRequest = Body(...)) -> dict[str, Any]:
-    """Return a valid-looking token pair (accepts any key).
-
-    TODO: ignore the credentials, generate a fake JWT-like access token and a
-    refresh token, and remember them so `/tokens/refresh` works.
+@router.post("/tokens", response_model=TokenResponse)
+async def generate_token(
+    payload: TokenRequest = Body(...),
+    tokens: TokenService = Depends(get_token_service),
+) -> TokenResponse:
+    """Return a token pair. Any credentials are accepted (AGENTS.md section 8).
 
     Args:
         payload: `apiKey` / `secretKey`.
+        tokens: Token service for this request.
 
     Returns:
-        dict[str, Any]: `TokenResponse`.
+        TokenResponse: The minted pair.
     """
-    raise NotImplementedError
+    return TokenResponse(**tokens.issue_token(payload.apiKey, payload.secretKey))
 
 
-@router.post("/tokens/refresh")
-async def refresh_token(payload: TokenRefreshRequest = Body(...)) -> dict[str, Any]:
-    """Exchange a refresh token for a new token pair.
-
-    TODO: validate the refresh token and return a fresh pair.
+@router.post("/tokens/refresh", response_model=TokenResponse)
+async def refresh_token(
+    payload: TokenRefreshRequest = Body(...),
+    tokens: TokenService = Depends(get_token_service),
+) -> TokenResponse:
+    """Exchange a refresh token for a new pair.
 
     Args:
         payload: `refreshToken`.
+        tokens: Token service for this request.
 
     Returns:
-        dict[str, Any]: `TokenResponse`.
+        TokenResponse: A fresh pair.
     """
-    raise NotImplementedError
+    return TokenResponse(**tokens.refresh_token(payload.refreshToken))
 
 
-# --- Purchases -------------------------------------------------------------
-
-
-@router.post("/purchases")
-async def create_purchase(payload: CreatePurchaseRequest = Body(...)) -> dict[str, Any]:
+@router.post("/purchases", response_model=PurchaseCreationResult)
+async def create_purchase(
+    payload: CreatePurchaseRequest = Body(...),
+    service: MockPurchaseService = Depends(get_purchase_service),
+    _token: str = Depends(require_access_token),
+) -> PurchaseCreationResult:
     """Create a purchase and return the switching URL.
-
-    TODO: delegate to `MockPurchaseService.create_purchase`.
 
     Args:
         payload: `CreatePurchaseDto`.
+        service: Purchase service for this request.
+        _token: Presented access token, validated by the dependency.
 
     Returns:
-        dict[str, Any]: `PurchaseCreationResult`.
+        PurchaseCreationResult: `purchaseId` and `pspSwitchingUrl`.
     """
-    raise NotImplementedError
+    return PurchaseCreationResult(**await service.create_purchase(payload.model_dump()))
 
 
-@router.get("/purchases")
+@router.get("/purchases", response_model=dict[str, Any])
 async def filter_purchases(
     clientReferenceNumber: str | None = Query(default=None),
     state: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, ge=1, le=100),
+    service: MockPurchaseService = Depends(get_purchase_service),
+    _token: str = Depends(require_access_token),
 ) -> dict[str, Any]:
     """List purchases with optional filters.
 
-    TODO: delegate to `MockPurchaseService.filter_purchases`.
+    TODO: delegate to `MockPurchaseService.filter_purchases`, mapping the
+    `clientReferenceNumber` query parameter onto the repository's
+    `client_reference_number` filter and slicing the result for `page`/`size`.
 
     Args:
         clientReferenceNumber: Optional reference filter.
         state: Optional state filter.
         page: Page number.
         size: Page size.
+        service: Purchase service for this request.
+        _token: Presented access token, validated by the dependency.
 
     Returns:
         dict[str, Any]: Paginated purchases.
@@ -172,10 +184,3 @@ async def psp_payments_page(purchase_id: int, outcome: str = "SUCCESSFUL") -> di
         dict[str, Any]: Rendered result data.
     """
     raise NotImplementedError
-
-
-# TODO: add demo-only helpers (e.g. GET /mock/state) to inspect the in-memory store.
-
-# Referenced so the settings import is not flagged as unused while the router
-# is still a stub; remove once the handlers read settings.
-_ = settings
