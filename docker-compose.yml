@@ -1,0 +1,52 @@
+name: ppg-demo
+
+services:
+  mock-ppg:
+    build: ./mock_ppg
+    container_name: ppg-demo-mock-ppg
+    environment:
+      LOG_LEVEL: ${MOCK_LOG_LEVEL:-INFO}
+      UNKNOWN_ANSWER_RATE: ${MOCK_UNKNOWN_ANSWER_RATE:-0.0}
+    ports:
+      # Host:container mapping – host port is configurable via .env
+      - "${MOCK_PPG_PORT:-8001}:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  merchant:
+    build: ./merchant
+    container_name: ppg-demo-merchant
+    depends_on:
+      mock-ppg:
+        condition: service_healthy
+    environment:
+      # --- PPG target: mock by default.
+      # For the real Jibit PPG change only these three values in .env
+      # (see docs/AGENTS.md section 11) and restart the merchant service.
+      PPG_BASE_URL: ${PPG_BASE_URL:-http://mock-ppg:8001}
+      PPG_API_KEY: ${PPG_API_KEY:-mock-key}
+      PPG_SECRET_KEY: ${PPG_SECRET_KEY:-mock-secret}
+      # --- Merchant
+      # Browser-facing base (used for links shown in the dashboard).
+      MERCHANT_CALLBACK_BASE: ${MERCHANT_CALLBACK_BASE:-http://localhost:8000}
+      # Container-network base. The mock posts the callback from inside its own
+      # container, where "localhost" is itself, so the callback URL must be the
+      # compose service name. Only relevant for the local mock.
+      MERCHANT_CALLBACK_BASE_INTERNAL: ${MERCHANT_CALLBACK_BASE_INTERNAL:-http://merchant:8000}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # --- Database (inside the container, persisted via the volume below)
+      DATABASE_URL: sqlite+aiosqlite:////data/merchant.db
+    ports:
+      - "${MERCHANT_PORT:-8000}:8000"
+    volumes:
+      - ./merchant/data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}PPG Demo Merchant{% endblock %}</title>
+    <!-- Alpine.js from CDN: no build step (ADR-004) -->
+    <script defer src="{{ alpinejs_cdn_url }}"></script>
+    <style>
+      /* TODO: replace with the real dashboard styling once pages are built. */
+      body { font-family: system-ui, sans-serif; margin: 2rem; color: #222; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { border: 1px solid #ddd; padding: 0.4rem 0.6rem; text-align: left; }
+      nav a { margin-right: 1rem; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>{% block heading %}PPG Demo Merchant{% endblock %}</h1>
+      <nav>
+        <a href="/">Dashboard</a>
+        <a href="/purchases/new">New purchase</a>
+      </nav>
+    </header>
+
+    <main>
+      {# TODO: flash messages / global error banner go here. #}
+      {% block content %}
+      <p>Skeleton page – no content yet.</p>
+      {% endblock %}
+    </main>
+  </body>
+</html>

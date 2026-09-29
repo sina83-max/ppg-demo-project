@@ -1,0 +1,25 @@
+# --- Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Secrets / env
+.env
+
+# --- Local data
+*.db
+merchant/data/*
+!merchant/data/.gitkeep
+
+# --- IDE
+.idea/
+.vscode/
+
+# --- Local-only dev-machine / corporate-network overrides (never commit)
+# These contain internal proxy IPs and mirror URLs.
+Dockerfile.local
+docker-compose.override.yml

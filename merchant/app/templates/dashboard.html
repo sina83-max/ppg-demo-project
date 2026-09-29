@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard – PPG Demo Merchant{% endblock %}
+{% block heading %}Purchases{% endblock %}
+
+{% block content %}
+{# TODO: pass the purchase list from PurchaseService.list_purchases() and render
+   one row per purchase with state, amount, PSP data and the actions below
+   (docs/AGENTS.md section 9). #}
+<div x-data="{ loading: false }">
+  <p>
+    <a href="/purchases/new">+ Create purchase</a>
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>id</th>
+        <th>client reference</th>
+        <th>amount</th>
+        <th>state</th>
+        <th>psp</th>
+        <th>created</th>
+        <th>actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {# TODO: {% for purchase in purchases %} … {% endfor %} #}
+      <tr>
+        <td colspan="7">No purchases yet.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  {# TODO: per-row actions: Verify -> POST /purchases/{id}/verify,
+             Reverse -> POST /purchases/{id}/reverse,
+             Refresh -> POST /purchases/{id}/refresh,
+             plus an expandable raw callback payload. #}
+</div>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}New purchase – PPG Demo Merchant{% endblock %}
+{% block heading %}Create purchase{% endblock %}
+
+{% block content %}
+{# TODO: form posts to POST /purchases (form-encoded) and the service builds the
+   callbackUrl from MERCHANT_CALLBACK_BASE (docs/flows.md section 1). #}
+<form method="post" action="/purchases" x-data="{ submitting: false }">
+  <p>
+    <label for="amount">Amount (IRR)</label><br />
+    <input type="number" id="amount" name="amount" min="5000" step="1" required />
+  </p>
+  <p>
+    <label for="client_reference_number">Client reference number</label><br />
+    <input type="text" id="client_reference_number" name="client_reference_number" required />
+  </p>
+  <p>
+    <label for="wage">Wage (IRR)</label><br />
+    <input type="number" id="wage" name="wage" min="0" step="1" value="0" />
+  </p>
+  <p>
+    <label for="description">Description</label><br />
+    <input type="text" id="description" name="description" />
+  </p>
+  <p>
+    <label for="user_identifier">User identifier</label><br />
+    <input type="text" id="user_identifier" name="user_identifier" />
+  </p>
+  <button type="submit" :disabled="submitting" @click="submitting = true">Create</button>
+</form>
+{% endblock %}
